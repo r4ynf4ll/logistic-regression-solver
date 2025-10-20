@@ -53,6 +53,9 @@ Or three columns (x y,label):
 
   <h3 style="margin-top:14px">Results (outputs every requested epochs)</h3>
   <pre id="results">No results yet.</pre>
+  <div style="margin-top:8px">
+    <button id="copyBtn">Copy results</button>
+  </div>
 
   <script>
     function sigmoid(z){ return 1 / (1 + Math.exp(-z)); }
@@ -69,8 +72,6 @@ Or three columns (x y,label):
           const p = parts[0].split(',').map(s=>s.trim()).filter(Boolean);
           if(p.length>=2) parts.splice(0,1,...p);
         }
-        // handle common CSV with comma between last two items
-        // try to interpret last token possibly prefixed by comma
         // normalize tokens that still contain commas
         const norm = [];
         for(const t of parts){
@@ -110,13 +111,14 @@ Or three columns (x y,label):
       return {loss,grad};
     }
 
+    const resultsEl = document.getElementById('results');
+
     document.getElementById('runBtn').addEventListener('click', ()=>{
       const raw = document.getElementById('csvInput').value;
       const lr = Math.max(0, parseFloat(document.getElementById('lr').value) || 0);
       const epochs = Math.max(1, Math.floor(parseFloat(document.getElementById('epochs').value) || 1));
       const outEvery = Math.max(1, Math.floor(parseFloat(document.getElementById('outEvery').value) || 1));
       const samples = parseInput(raw);
-      const resultsEl = document.getElementById('results');
       if(samples.length === 0){ resultsEl.textContent = 'No valid samples parsed.'; return; }
 
       // determine feature dimension (require consistent dims)
@@ -134,8 +136,28 @@ Or three columns (x y,label):
         for(let k=0;k<w.length;k++) w[k] -= lr * grad[k];
         if(e % outEvery === 0 || e === epochs){
           const ws = w.map(v => v.toFixed(6)).join(', ');
-          resultsEl.textContent += `epoch ${e}  loss=${loss.toFixed(6)}  weights=[${ws}]\n`;
+          resultsEl.textContent += `${ws}\n`;
         }
+      }
+    });
+
+    // copy button behavior
+    document.getElementById('copyBtn').addEventListener('click', async ()=>{
+      const txt = resultsEl.textContent || '';
+      if(!txt.trim() || txt.trim() === 'No results yet.') return;
+      try {
+        await navigator.clipboard.writeText(txt);
+        const btn = document.getElementById('copyBtn');
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(()=> btn.textContent = prev, 1400);
+      } catch (e) {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
       }
     });
   </script>
