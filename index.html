@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Logistic Regression — single file</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:20px;color:#111}
+    label{display:block;margin-top:10px;font-weight:600}
+    textarea{width:100%;height:180px;font-family:monospace;padding:8px;border:1px solid #ccc;border-radius:6px}
+    input[type=number]{width:120px;padding:6px;border:1px solid #ccc;border-radius:6px}
+    .row{display:flex;gap:10px;align-items:center;margin-top:8px}
+    button{padding:8px 12px;border-radius:6px;border:0;background:#0b84ff;color:#fff;cursor:pointer}
+    pre{background:#f7f7f7;border:1px solid #e0e0e0;padding:10px;border-radius:6px;white-space:pre-wrap}
+    .muted{color:#666;font-size:13px;margin-top:6px}
+  </style>
+</head>
+<body>
+  <h1 style="margin:0 0 10px">Logistic Regression — Gradient Descent</h1>
+
+  <label for="csvInput">Paste CSV (two columns: feature,label). Accepts also three columns: x y,label</label>
+  <textarea id="csvInput" placeholder="Examples (two columns):
+1.2,1
+2.4,0
+-0.5,1
+
+Or three columns (x y,label):
+1.2 0.5,1
+2.4 1.1,0"></textarea>
+
+  <div class="row">
+    <div>
+      <label for="lr">Learning rate</label>
+      <input id="lr" type="number" step="0.0001" min="0" value="0.1">
+    </div>
+
+    <div>
+      <label for="epochs">Epochs</label>
+      <input id="epochs" type="number" min="1" value="100">
+    </div>
+
+    <div>
+      <label for="outEvery">Output every (epochs)</label>
+      <input id="outEvery" type="number" min="1" value="10">
+    </div>
+
+    <div style="align-self:flex-end">
+      <button id="runBtn">Run gradient descent</button>
+    </div>
+  </div>
+
+  <div class="muted">Input format: each non-empty line should be CSV or space-separated. Lines with 2 values are treated as [feature,label]. Lines with 3 values are treated as [x,y,label]. Label must be 0 or 1 (or -1 treated as 0).</div>
+
+  <h3 style="margin-top:14px">Results (outputs every requested epochs)</h3>
+  <pre id="results">No results yet.</pre>
+
+  <script>
+    function sigmoid(z){ return 1 / (1 + Math.exp(-z)); }
+
+    function parseInput(text){
+      const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      const samples = [];
+      for(const line of lines){
+        // allow comma or whitespace separators
+        const parts = line.replace(/,+/g,' ').trim().split(/\s+/);
+        if(parts.length < 2) continue;
+        // if last token contains comma (e.g. "1.2,1") split by comma
+        if(parts.length === 1 && parts[0].includes(',')) {
+          const p = parts[0].split(',').map(s=>s.trim()).filter(Boolean);
+          if(p.length>=2) parts.splice(0,1,...p);
+        }
+        // handle common CSV with comma between last two items
+        // try to interpret last token possibly prefixed by comma
+        // normalize tokens that still contain commas
+        const norm = [];
+        for(const t of parts){
+          if(t.includes(',')){
+            const sub = t.split(',').map(x=>x.trim()).filter(Boolean);
+            norm.push(...sub);
+          } else norm.push(t);
+        }
+        if(norm.length < 2) continue;
+        // label is last token
+        const labelRaw = parseFloat(norm[norm.length-1]);
+        if(Number.isNaN(labelRaw)) continue;
+        let label = labelRaw === -1 ? 0 : (labelRaw ? 1 : 0);
+        const featTokens = norm.slice(0, norm.length-1).map(Number);
+        if(featTokens.some(v=>Number.isNaN(v))) continue;
+        samples.push({x: featTokens, label});
+      }
+      return samples;
+    }
+
+    function computeLossAndGrad(w, data){
+      const n = data.length;
+      if(n===0) return {loss:0,grad: new Array(w.length).fill(0)};
+      let loss = 0;
+      const grad = new Array(w.length).fill(0); // grad[0]=bias
+      for(const s of data){
+        let z = w[0];
+        for(let j=0;j<s.x.length;j++) z += w[j+1] * s.x[j];
+        const p = sigmoid(z);
+        loss += -(s.label * Math.log(p + 1e-12) + (1 - s.label) * Math.log(1 - p + 1e-12));
+        const err = p - s.label;
+        grad[0] += err;
+        for(let j=0;j<s.x.length;j++) grad[j+1] += err * s.x[j];
+      }
+      for(let i=0;i<grad.length;i++) grad[i] /= n;
+      loss /= n;
+      return {loss,grad};
+    }
+
+    document.getElementById('runBtn').addEventListener('click', ()=>{
+      const raw = document.getElementById('csvInput').value;
+      const lr = Math.max(0, parseFloat(document.getElementById('lr').value) || 0);
+      const epochs = Math.max(1, Math.floor(parseFloat(document.getElementById('epochs').value) || 1));
+      const outEvery = Math.max(1, Math.floor(parseFloat(document.getElementById('outEvery').value) || 1));
+      const samples = parseInput(raw);
+      const resultsEl = document.getElementById('results');
+      if(samples.length === 0){ resultsEl.textContent = 'No valid samples parsed.'; return; }
+
+      // determine feature dimension (require consistent dims)
+      const dim = samples[0].x.length;
+      if(!samples.every(s => s.x.length === dim)){
+        resultsEl.textContent = 'Inconsistent feature column count detected.';
+        return;
+      }
+
+      // initialize weights (bias + dim)
+      let w = new Array(dim + 1).fill(0);
+      resultsEl.textContent = '';
+      for(let e=1;e<=epochs;e++){
+        const {loss,grad} = computeLossAndGrad(w, samples);
+        for(let k=0;k<w.length;k++) w[k] -= lr * grad[k];
+        if(e % outEvery === 0 || e === epochs){
+          const ws = w.map(v => v.toFixed(6)).join(', ');
+          resultsEl.textContent += `epoch ${e}  loss=${loss.toFixed(6)}  weights=[${ws}]\n`;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
