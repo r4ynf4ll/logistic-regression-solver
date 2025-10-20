@@ -44,8 +44,9 @@ Or three columns (x y,label):
       <input id="outEvery" type="number" min="1" value="10">
     </div>
 
-    <div style="align-self:flex-end">
+    <div style="align-self:flex-end;display:flex;flex-direction:column;gap:8px">
       <button id="runBtn">Run gradient descent</button>
+      <button id="resetBtn" style="background:#e85d5d">Reset</button>
     </div>
   </div>
 
@@ -159,6 +160,15 @@ Or three columns (x y,label):
         ta.select();
         try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
       }
+    });
+
+    // reset button behavior
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
+      document.getElementById('csvInput').value = '';
+      document.getElementById('lr').value = '0.1';
+      document.getElementById('epochs').value = '100';
+      document.getElementById('outEvery').value = '10';
+      resultsEl.textContent = 'No results yet.';
     });
   </script>
 </body>
